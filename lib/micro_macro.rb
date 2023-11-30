@@ -9,11 +9,55 @@ class Micro_Macro
     #
   end
 
+  class Black_Hole
+    #
+    # Used as default container of undefined macros.  It defines
+    # only the append method << that just does nothing.  A kind of
+    # /dev/null
+    #
+    def <<(x)
+    end
+  end
+
+  
+  def Micro_Macro.no_override(s)
+    Immutable_Expansion.new(s)
+  end
+
+  def Micro_Macro.macros_from_array(input=ARGV, options = Hash.new)
+    default_options = {:macros       => Hash.new,
+                       :immutable    => true}
+
+    default_options.keys.each do |key|
+      unless options.has_key?(key)
+        options[key] = default_options[key]
+      end
+    end
+
+    
+    macros = options[:macros]
+
+    input.each do |arg|
+      name, val=arg.split('=', 2)
+
+      next if val.nil?
+
+      if options[:immutable]
+        macros[name]=Micro_Macro.no_override(val)
+      else
+        macros[name]=val
+      end
+    end
+
+    return macros
+  end
+
   def initialize(options = Hash.new)
     default_options = {:open         => '%{',
                        :close        => '}%',
                        :comment      => '--',
-                       :on_undefined => "" }
+                       :on_undefined => "" ,
+                       :macros       => Hash.new}
 
     default_options.keys.each do |key|
       unless options.has_key?(key)
@@ -22,14 +66,12 @@ class Micro_Macro
     end
 
     @options=options
+    @basic_macros=options[:macros]
+    @macros=nil
   end
 
-  def expand(input, output, macros={})    
-    missing = Hash.new
-
-    if input.is_a?(String)
-      input = [ input ];
-    end
+  def expand(input, output, undefined_macros=Black_Hole.new)
+    @macros=@basic_macros
     
     input.each do
       |line|
@@ -39,15 +81,13 @@ class Micro_Macro
 
         break if command.nil?
 
-        replacement = execute_command(command, macros, missing)
+        replacement = execute_command(command, macros, undefined_macros)
 
         line = pre + replacement + post
       end
 
       output << line
     end
-
-    return missing.keys
   end
 
 
@@ -70,7 +110,8 @@ class Micro_Macro
       #  If I'm herea open_position == close_position and this
       #  happens if and only if they are both beyond_end
       #
-
+      raise "This should not happen" unless open_position==beyond_end
+      
       return [nil, beyond_end]
     end
 
@@ -144,7 +185,7 @@ class Micro_Macro
       else
         case @options[:on_undefined]
         when String
-          missing[command]=true
+          missing << command
           return @options[:on_undefined]
 
         when :die
@@ -164,24 +205,4 @@ class Micro_Macro
       return ""
     end
   end
-
-
-  def Micro_Macro.no_override(s)
-    Immutable_Expansion.new(s)
-  end
-
-  def Micro_Macro.prefill_from_cli(macros=nil, argv=ARGV)
-    macros = Hash.new if macros.nil?
-
-    argv.each do |arg|
-      name, val=arg.split('=', 2)
-
-      next if val.nil?
-
-      macros[name]=Micro_Macro.no_override(val)
-    end
-
-    return macros
-  end
-
 end
