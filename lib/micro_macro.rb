@@ -1,4 +1,4 @@
-module Micro_Macro
+class Micro_Macro
   class Immutable_Expansion < String
     #
     # Are you wondering what this class is about?  It is used for 
@@ -9,24 +9,131 @@ module Micro_Macro
     #
   end
 
-  def Micro_Macro.extract_command(line, options)
-    
-    start = line.index(options[:open])
+  def initialize(options = Hash.new)
+    default_options = {:open         => '%{',
+                       :close        => '}%',
+                       :comment      => '--',
+                       :on_undefined => "" }
 
-    return [line, nil, nil] unless start
-
-    stop = line[start+2..-1].index(options[:close])
-
-    if stop.nil?
-      return [line, nil, nil] 
-    else
-      stop += start+2
-      return [line[0...start], line[start+2...stop], line[stop+2..-1]]
+    default_options.keys.each do |key|
+      unless options.has_key?(key)
+        options[key] = default_options[key]
+      end
     end
+
+    @options=options
   end
 
-  def Micro_Macro.execute_command(command, macros, missing, options)
-    return "" if command[0...options[:comment].size] == options[:comment]
+  def expand(input, output, macros={})    
+    missing = Hash.new
+
+    if input.is_a?(String)
+      input = [ input ];
+    end
+    
+    input.each do
+      |line|
+
+      loop do
+        pre, command, post = extract_command(line)
+
+        break if command.nil?
+
+        replacement = execute_command(command, macros, missing)
+
+        line = pre + replacement + post
+      end
+
+      output << line
+    end
+
+    return missing.keys
+  end
+
+
+  private
+  
+  def find_delimiter(line, from)
+    beyond_end = line.size
+
+    open_position  = (line.find(options[:open]))  || beyond_end
+    close_position = (line.find(options[:close])) || beyond_end
+
+    if open_position < close_position
+      return [:open, open_position]
+      
+    elsif close_position < open_position
+      return [:close, close_position]
+
+    else
+      #
+      #  If I'm herea open_position == close_position and this
+      #  happens if and only if they are both beyond_end
+      #
+
+      return [nil, beyond_end]
+    end
+
+  end
+
+  def extract_command(line)
+    
+    delimiter, position = find_delimiter(line, 0)
+
+    case delimiter
+    when nil
+      return [line, nil, nil]
+
+    when :close
+      raise "XXXX Unmatched close"
+
+    when :open
+      # nothing to do
+
+    else
+      raise "I should never arrive here"
+    end
+
+    depth=1
+
+    first = position + @options[:open].size
+    last  = nil
+    
+    cursor = first
+
+    while depth > 0
+      delimiter, position = find_delimiter(line, cursor)
+
+      case delimiter
+      when nil 
+        raise "XXXX"
+
+      when :open
+        depth += 1
+        cursor = position + @options[:open].size
+
+      when :close
+        depth -= 1
+        cursor = position + @options[:close].size
+
+        if depth==0
+          last=position-1
+        end        
+      else
+        raise "I should never arrive here"
+        
+      end
+    end
+
+    return [
+      line[0..first-@options[:open].size-1],
+      line[first..last],
+      line[last+@options[:close].size+1..-1]
+    ]
+  end
+
+  def execute_command(command, macros, missing)
+    return "" if command[0...@options[:comment].size] == @options[:comment]
     
     name, val=command.split('=', 2)
 
@@ -35,12 +142,10 @@ module Micro_Macro
         return macros[command]
 
       else
-        on_undefined = 
-
-        case options[:on_undefined]
+        case @options[:on_undefined]
         when String
           missing[command]=true
-          return options[:on_undefined]
+          return @options[:on_undefined]
 
         when :die
           raise "Macro '#{command}' undefined"
@@ -60,38 +165,6 @@ module Micro_Macro
     end
   end
 
-  def Micro_Macro.expand(input, output, macros={}, options={})
-    default_options = {:open         => '%{',
-                       :close        => '}%',
-                       :comment      => '--',
-                       :on_undefined => "" }
-
-    default_options.keys.each do |key|
-      unless options.has_key?(key)
-        options[key] = default_options[key]
-      end
-    end
-    
-    missing = Hash.new
-    
-    input.each do
-      |line|
-
-      loop do
-        pre, command, post = Micro_Macro.extract_command(line, options)
-
-        break if command.nil?
-
-        replacement = Micro_Macro.execute_command(command, macros, missing, options)
-
-        line = pre + replacement + post
-      end
-
-      output << line
-    end
-
-    return missing.keys
-  end
 
   def Micro_Macro.no_override(s)
     Immutable_Expansion.new(s)
