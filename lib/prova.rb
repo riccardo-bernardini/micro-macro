@@ -2,7 +2,7 @@
 
 require './micro_macro.rb'
 
-a="pippo e %{chi}% vanno %{dove}%"
+a="%{cugino=mio zio di %{dove}%}% pippo e %{chi}% vanno %{dove}%"
 
 puts Micro_Macro.expand(a,
                         :macros => {

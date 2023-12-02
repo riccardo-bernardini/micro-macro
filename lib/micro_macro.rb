@@ -92,6 +92,8 @@ class Micro_Macro
 
   def expand(input, output, undefined_macros=Black_Hole.new)
     @macros=@basic_macros
+
+    counter=10
     
     input.each do
       |line|
@@ -101,12 +103,17 @@ class Micro_Macro
 
         break if command.nil?
 
-        replacement = execute_command(command, macros, undefined_macros)
+        replacement = execute_command(command, undefined_macros)
+
 
         line = pre + replacement + post
       end
 
       output << line
+
+      counter -= 1
+
+      return if  counter ==0
     end
   end
 
@@ -119,8 +126,8 @@ class Micro_Macro
   def find_delimiter(line, from)
     beyond_end = line.size
 
-    open_position  = (line.index(@options[:open]))  || beyond_end
-    close_position = (line.index(@options[:close])) || beyond_end
+    open_position  = (line.index(@options[:open], from))  || beyond_end
+    close_position = (line.index(@options[:close], from)) || beyond_end
 
     if open_position < close_position
       return [:open, open_position]
@@ -189,21 +196,33 @@ class Micro_Macro
       end
     end
 
-    return [
-      line[0..first-@options[:open].size-1],
-      line[first..last],
-      line[last+@options[:close].size+1..-1]
-    ]
+    head = if first==@options[:open].size
+             ""
+           elsif first > @options[:open].size
+             line[0..first-@options[:open].size-1]
+           else
+             raise "I should never arrive here"
+           end
+
+    body = line[first..last]
+
+    tail = if last+@options[:close].size+1 >= line.size
+             ""
+           else
+             line[last+@options[:close].size+1...line.size]
+           end
+
+    return [head, body, tail]
   end
 
-  def execute_command(command, macros, missing)
+  def execute_command(command, missing)
     return "" if command[0...@options[:comment].size] == @options[:comment]
     
     name, val=command.split('=', 2)
 
     if val.nil?
-      if macros.has_key?(command)
-        return macros[command]
+      if @macros.has_key?(command)
+        return @macros[command]
 
       else
         case @options[:on_undefined]
@@ -221,8 +240,8 @@ class Micro_Macro
 
       end
     else
-      unless macros[name].is_a?(Immutable_Expansion)
-        macros[name]=val
+      unless @macros[name].is_a?(Immutable_Expansion)
+        @macros[name]=val
       end
 
       return ""
