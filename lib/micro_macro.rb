@@ -52,6 +52,26 @@ class Micro_Macro
     return macros
   end
 
+  def Micro_Macro.expand(input, options=Hash.new)
+    wrapped_input = if input.is_a?(String)
+                      [ input ]
+                    else
+                      input
+                    end
+
+    result = Array.new
+
+    expander = Micro_Macro.new(options)
+
+    expander.expand(wrapped_input, result)
+
+    if input.is_a?(String)
+      return result[0]
+    else
+      return result
+    end
+  end
+
   def initialize(options = Hash.new)
     default_options = {:open         => '%{',
                        :close        => '}%',
@@ -90,14 +110,17 @@ class Micro_Macro
     end
   end
 
+  def consolidate
+    @basic_macros=@macros
+  end
 
   private
   
   def find_delimiter(line, from)
     beyond_end = line.size
 
-    open_position  = (line.find(options[:open]))  || beyond_end
-    close_position = (line.find(options[:close])) || beyond_end
+    open_position  = (line.index(@options[:open]))  || beyond_end
+    close_position = (line.index(@options[:close])) || beyond_end
 
     if open_position < close_position
       return [:open, open_position]
